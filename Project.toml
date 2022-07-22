@@ -1,0 +1,25 @@
+name = "XXZSim"
+uuid = "42b9e361-07be-4e01-a8ee-64f4d2405616"
+authors = ["Adrian Braemer <11058200+abraemer@users.noreply.github.com> and contributors"]
+version = "0.4.0"
+
+[deps]
+FilteredMatrices = "d9af566e-5b8c-4205-a764-d8c3ac5960e2"
+JLD2 = "033835bb-8acc-5ee8-8aae-3f567f8a3819"
+MKL = "33e6dc65-8f57-5167-99aa-e5a354878fb2"
+Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
+SimLib = "d0a720f3-e115-4687-947d-90041a62db49"
+SpinSymmetry = "ebcc8a00-959b-4e58-a088-282ffd8a4f25"
+Statistics = "10745b16-79ce-11e8-11f9-7d13ad32a3b2"
+XXZNumerics = "df0c8232-4a8d-40d6-8487-e9f918bc1c27"
+
+[compat]
+SimLib = "0.10"
+XXZNumerics = "0.7"
+julia = "1.6"
+
+[extras]
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+[targets]
+test = ["Test"]
