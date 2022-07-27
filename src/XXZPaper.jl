@@ -27,7 +27,9 @@ function merge_runs(dir)
         for subfile in subfiles
             data = load(joinpath(run_folders[1], subdir, subfile))
             for run_folder in run_folders[2:end]
-                data = merge_data(data, load(joinpath(run_folder, subdir, subfile)))
+                path = joinpath(run_folder, subdir, subfile)
+                isfile(path) || continue
+                data = merge_data(data, load(path))
             end
             save(data; prefix=outdir)
         end
