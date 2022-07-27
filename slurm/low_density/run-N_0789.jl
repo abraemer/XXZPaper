@@ -6,7 +6,7 @@
 #SBATCH --mem=20gb
 #SBATCH --cpus-per-task=48
 #SBATCH --job-name=paper-N_789-ld
-#SBATCH --output="logs/zero-field-N_789-%j.out"
+#SBATCH --output="logs/low_density-N_789-%j.out"
 ########### End Slurm header ##########
 #=
 # load modules
