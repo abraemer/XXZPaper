@@ -1,5 +1,5 @@
 ### A Pluto.jl notebook ###
-# v0.19.11
+# v0.19.12
 
 using Markdown
 using InteractiveUtils
@@ -164,11 +164,29 @@ lsr_main_W = let p = plot(;xlabel="W", ylabel=L"\langle r \rangle", legend=:topr
 	p
 end
 
+# ╔═╡ 997543e2-a27f-479d-be8b-73d7b639b7f2
+## error of mean as ribbon
+## barely visible
+lsr_errorofmean = let lsr_means_high = hcat(_prep_vals.(load_lsr.(alpha6_high); dims=(1,2,3,4), func=errorofmeandrop)...),
+	lsr_means_low  = hcat(_prep_vals.(load_lsr.(alpha6_low ); dims=(1,2,3,4), func=errorofmeandrop)...)
+	vcat(lsr_means_low, lsr_means_high)[ρsortperm, :]
+end;
+
+# ╔═╡ a5c221a6-c6c2-4301-b93b-7178859bcf68
+let p = plot(;xlabel="W", ylabel=L"\langle r \rangle", legend=:topright, xaxis=:log, xlim=W_xlim)
+	xticks!(W_xticks, string.(W_xticks))
+	hline!(p, [0.5295]; label="GOE", ls=:dash, width=2, color=:limegreen)
+	hline!(p, [2 * log(2)-1]; label="Poisson", ls=:dot, width=2)
+	color = palette(:ice, length(Ns)+3, rev=true)#Plots.colormap("RdBu", length(Ninds)+3)[4:end]'
+	plot!(p,  W(ρvals), lsr_means; palette=color, label=["N=$N" for N in Ns'], ribbon=lsr_errorofmean)
+	p
+end
+
 # ╔═╡ 0a4e0811-036d-46f5-ae89-8ffa7fb7ab1a
 section_delims = [0.515,0.58,0.95]
 
 # ╔═╡ 8b8bafa7-e325-4d36-9624-1e1efb6c972d
-lsr_full_W = let p = plot(lsr_main_W),
+lsr_full_W = let p = plot(lsr_main_W; dpi=200,tickfontsize=10, labelfontsize=12),
 	lfont = ("serif",15,:hcenter,:vcenter),
 	ly = 0.21
 	vline!(p, section_delims; label=nothing, color=:black, alpha=0.7, width=1.5)
@@ -204,11 +222,27 @@ pr_means_zbasis = let pr_means_high =
 	vcat(hcat(pr_means_low...), hcat(pr_means_high...))[ρsortperm, :]
 end;
 
+# ╔═╡ 44226e15-2f6d-4077-bb6e-d42ff7af5597
+pr_errorofmean_zbasis = let pr_means_high =
+	[_prep_vals(load(PRDataDescriptor(ZBasis(), edd)); dims=(1,2,3,4), func=errorofmeandrop) for edd in alpha6_high]
+	pr_means_low =
+	[_prep_vals(load(PRDataDescriptor(ZBasis(), edd)); dims=(1,2,3,4), func=errorofmeandrop) for edd in alpha6_low]
+	vcat(hcat(pr_means_low...), hcat(pr_means_high...))[ρsortperm, :]
+end;
+
 # ╔═╡ 7e66c883-eb17-410f-b915-3d9b273af71b
 pr_means_pairs = let pr_means_high =
 	[_prep_vals(load(PRDataDescriptor(PairBasis(edd.system_size,PetersMethod()), edd)); dims=(1,2,3,4)) for edd in pr_edds_high]
 	pr_means_low =
 	[_prep_vals(load(PRDataDescriptor(PairBasis(edd.system_size,PetersMethod()), edd)); dims=(1,2,3,4)) for edd in pr_edds_low]
+	vcat(hcat(pr_means_low...), hcat(pr_means_high...))[ρsortperm, :]
+end;
+
+# ╔═╡ 5de08736-2542-4306-b2b2-caca4c611168
+pr_errorofmean_pairs = let pr_means_high =
+	[_prep_vals(load(PRDataDescriptor(PairBasis(edd.system_size,PetersMethod()), edd)); dims=(1,2,3,4), func=errorofmeandrop) for edd in pr_edds_high]
+	pr_means_low =
+	[_prep_vals(load(PRDataDescriptor(PairBasis(edd.system_size,PetersMethod()), edd)); dims=(1,2,3,4), func=errorofmeandrop) for edd in pr_edds_low]
 	vcat(hcat(pr_means_low...), hcat(pr_means_high...))[ρsortperm, :]
 end;
 
@@ -244,7 +278,7 @@ pr_means_naive_lowest =
 # ╔═╡ 5e57efdc-5ae3-4a86-ae6d-9f0a49c4d5c7
 begin
 	pr_lines_in_overview = 3
-	pr_linfit_index = 15
+	pr_linfit_index = 9
 	pr_zbasis_color = palette(:ice, 5, rev=true)[2:end]
 	pr_pairs_color = :Reds
 	pr_naive_color = :PRGn_10
@@ -265,6 +299,29 @@ pr_main_W = let Ns = pr_Ns[end-pr_lines_in_overview+1:end],
 		palette, label=["z-basis N=$N" for N in Ns'])
 	plot!(p, W(ρvals), pr_means_pairs ./ binomial.(Ns, div.(Ns .- 1, 2))';
 		palette, label=["pair-basis N=$N" for N in Ns'], ls=:dash)
+	# plot!(p, W(ρvals), pr_means_naive ./ binomial.(Ns, div.(Ns .- 1, 2))';
+	# 	palette, label=["N=$N" for N in Ns'])
+	p
+end
+
+# ╔═╡ aad4eeb4-8fdb-40e3-9301-49bd9a4de439
+## ribbon indicates error of mean
+## -> line width is of same order
+let Ns = pr_Ns[end-pr_lines_in_overview+1:end],
+	pr_means_zbasis = pr_means_zbasis[:, end-pr_lines_in_overview*2+2:2:end],
+	pr_eom_zbasis = pr_errorofmean_zbasis[:, end-pr_lines_in_overview*2+2:2:end],
+	pr_means_pairs = pr_means_pairs[:, end-pr_lines_in_overview+1:end],
+	pr_eom_pairs = pr_errorofmean_pairs[:, end-pr_lines_in_overview+1:end],
+	pr_means_naive = pr_means_naive[:,end-pr_lines_in_overview+1:end],
+	palette = pr_palette,
+	p = plot(;xlabel="W", ylabel=L"\mathrm{PR}/|\mathcal{H}|", legend=:topright, yaxis=:log, xlim=W_xlim)
+	xticks!(W_xticks, string.(W_xticks))
+	plot!(p, W(ρvals), pr_means_zbasis ./ binomial.(Ns, div.(Ns .- 1, 2))';
+		palette, label=["z-basis N=$N" for N in Ns'],
+		ribbon = pr_eom_zbasis ./ binomial.(Ns, div.(Ns .- 1, 2))')
+	plot!(p, W(ρvals), pr_means_pairs ./ binomial.(Ns, div.(Ns .- 1, 2))';
+		palette, label=["pair-basis N=$N" for N in Ns'], ls=:dash,
+		ribbon = pr_eom_pairs ./ binomial.(Ns, div.(Ns .- 1, 2))')
 	# plot!(p, W(ρvals), pr_means_naive ./ binomial.(Ns, div.(Ns .- 1, 2))';
 	# 	palette, label=["N=$N" for N in Ns'])
 	p
@@ -354,7 +411,7 @@ pr_full_W = let main = plot(pr_main_W; title="(a)", legend=:topright)
 	plot!(main, [0.55,0.93], [0.32,0.5]; label=false, color=:gray, alpha=0.35)
 	plot!(main, [0.55,0.93], [0.17,0.06]; label=false, color=:gray, alpha=0.35)
 	vline!(main, [W(ρvals[pr_linfit_index])]; color=:black, ls=:dashdot, label=false)
-	p = plot(main, plot(pr_side;title="(b)"); layout=@layout([a;b]), size=(600,800), dpi=200, titlelocation = :left)
+	p = plot(main, plot(pr_side;title="(b)"); layout=@layout([a;b]), size=(600,800), dpi=200, titlelocation = :left, tickfontsize=10, labelfontsize=12)
 
 	p
 end
@@ -364,6 +421,19 @@ savefig(pr_full_W, joinpath(SAVEPATH, "pr_W.pdf"))
 
 # ╔═╡ f9abd6af-f125-41ef-915d-a73b041f9690
 pol1_error(x,p,perr) = @. sqrt(x^2 * perr[2]^2 + perr[1]^2)
+
+# ╔═╡ 6b5ad674-b541-45ec-8bbf-76543f77297f
+# rote linie nach links
+# hce fällt etwas unter prediction -> pp nicht perfekt -> gibt abweichungen, siehe auch PR
+
+# ╔═╡ ef28ab4b-e4fa-4188-913a-fb298b34b6e9
+grid(2,1; heights=(0.7,0.3))
+
+# ╔═╡ b6ebda19-4cb0-419f-a3ed-1525cb09a929
+(@layout [a{0.6h, 0.1w}; b])[1]
+
+# ╔═╡ 52c23938-f012-459b-9047-b103fe6a2fe7
+[1;"a"]
 
 # ╔═╡ a8b925f1-1763-43eb-9162-219b85ede984
 function _cut_prediction(posdata)
@@ -396,7 +466,7 @@ end
 # ╔═╡ f73cc7af-6f60-48c2-bdf1-3de67260e9b6
 entropy_plot_full_W = let detailsat = reverse([9,40,45]),
 	details_color = palette(:Set2_3),
-	entropy_main = plot(entropy_main_W; legend=:bottomleft),
+	entropy_main = plot(entropy_main_W; legend=:bottomleft, dpi=200),
 	prediction_posdata = load_positions(:box_pbc,1,16;prefix=LOW_DENSITY)
 	# ,detail_plots = [entropy_subplot(1:7,at) for at in detailsat]
 
@@ -420,12 +490,50 @@ entropy_plot_full_W = let detailsat = reverse([9,40,45]),
 	plot!(entropy_main,[],[];ribbon=[], label="fit", subplot=2, color=:gray)
 	fit_to_annotation(p,color) = text("S=$(round(p[1];sigdigits=2)) + $(round(p[2];sigdigits=2))N"; pointsize=8, color,halign=:left)
 	texts = [fit_to_annotation(fit.param, details_color[i]) for (i,fit) in enumerate(fits)]
-	annotate!([(14,4.6,texts[1]), (13,2.2,texts[2]),(11,1.15,texts[3])];subplot=2, palette=details_color)
-
+	annotate!(entropy_main, [(14,4.6,texts[1]), (13,2.2,texts[2]),(11,1.15,texts[3])];subplot=2, palette=details_color)
+			
 	### Prediction
-	plot!(W(prediction_posdata.ρs)[1:23],
+	plot!(entropy_main, W(prediction_posdata.ρs)[1:23],
 		vec(mean(pair_entropy_prediction(prediction_posdata);dims=1))[1:23];
 		ls = :dot, width=2, color=:black, label="prediction")
+end
+
+# ╔═╡ 07b2ef84-202b-4960-a5ab-af7c7be71f6a
+let detailsat = reverse([9,40,45]),
+	details_color = palette(:Set2_3),
+	entropy_main = plot(entropy_main_W; legend=:bottomleft, dpi=200),
+	prediction_posdata = load_positions(:box_pbc,1,16;prefix=LOW_DENSITY)
+	# ,detail_plots = [entropy_subplot(1:7,at) for at in detailsat]
+
+	for (at, color) in zip(detailsat, details_color)
+		vline!(entropy_main, [W(ρvals[at])]; color, alpha = 0.9, ls=:dash, label=nothing)
+	end
+
+	fits = [curve_fit(pol1, Ns, hce_means[at,:], [1.0,0.5]) for at in detailsat]
+
+	fitdata = reduce(hcat, pol1(Ns,fit.param) for fit in fits)
+	fiterrors = reduce(hcat, pol1_error(Ns,fit.param,stderror(fit)) for fit in fits)
+
+	plot!(entropy_main, Ns, fitdata; ribbon=fiterrors,
+		xlabel="N", label=false, palette=details_color,
+		inset=(1,bbox(0.38,0.05,0.55,0.3)), subplot=2)
+	scatter!(entropy_main, Ns, hce_means[detailsat,:]'; marker=:x, color=:black,
+		subplot=2, label=false, legend=:right)
+
+	# inset legend
+	scatter!(entropy_main, [], []; marker=:x, color=:black, subplot=2, label="data", legend=:topleft)
+	plot!(entropy_main,[],[];ribbon=[], label="fit", subplot=2, color=:gray)
+	fit_to_annotation(p,color) = text("S=$(round(p[1];sigdigits=2)) + $(round(p[2];sigdigits=2))N"; pointsize=8, color,halign=:left)
+	texts = [fit_to_annotation(fit.param, details_color[i]) for (i,fit) in enumerate(fits)]
+	annotate!(entropy_main, [(14,4.4,texts[1]), (13,2,texts[2]),(11,1.15,texts[3])];subplot=2, palette=details_color)
+			
+	### Prediction
+	plot!(entropy_main, W(prediction_posdata.ρs)[1:23],
+		vec(mean(pair_entropy_prediction(prediction_posdata);dims=1))[1:23];
+		ls = :dot, width=2, color=:black, label="prediction")
+
+	# lens
+	lens!(entropy_main, [1.6,2.0], [0.7,1.0] ; inset = (1, bbox(0.38, 0.42, 0.55, 0.3)), subplot=3)
 end
 
 # ╔═╡ 9f63456f-9da1-4203-ad01-8d159ebd1bee
@@ -447,7 +555,7 @@ end
 # ╔═╡ 67bf03ac-bc0c-4fce-afc9-edd8938925ee
 entropy_var_full_parabola_W = let fitrange = 38:42,
 	fitplotrange = fitrange,
-	p = plot(entropy_var_main_W; legend=:outside, legendposition=(1.0,0.0), dpi=200)
+	p = plot(entropy_var_main_W; legend=:outside, legendposition=(1.0,0.0), dpi=200, tickfontsize=10, labelfontsize=12)
 	@. model(x, p) = p[1] + p[2]*(x-p[3])^2
 
 	fits = [curve_fit(model, W(ρvals[fitrange]), col[fitrange], [1.0, -30, 0.7]) for col in eachcol(hce_std)]
@@ -553,7 +661,7 @@ end;
 tp_sz_transition
 
 # ╔═╡ 30100b77-d704-4f7e-9aea-9a2953b86c3b
-thouless_main_W = let p = plot(;xlabel="W", ylabel=L"\langle \mathcal{G} \rangle", legend=:topright, xaxis=log, xlim=W_xlim)
+thouless_main_W = let p = plot(;xlabel="W", ylabel="Thouless parameter \$\\mathcal{G}\$", legend=:topright, xaxis=log, xlim=W_xlim)
 	xticks!(p, W_xticks, string.(W_xticks))
 	color = palette(:ice, length(Ns)+3; rev=true)[2:end]
 	plot!(p, W(ρvals), tp_means_sz; palette=color, label=["N=$N" for N in Ns'])
@@ -561,7 +669,7 @@ thouless_main_W = let p = plot(;xlabel="W", ylabel=L"\langle \mathcal{G} \rangle
 end
 
 # ╔═╡ 5a366799-c8a1-4fe5-afe2-909524e30e5e
-thouless_full_W = let p = plot(thouless_main_W; dpi=200, legend=:topright, legend_columns=-1)
+thouless_full_W = let p = plot(thouless_main_W; dpi=200, legend=:topright, legend_columns=-1, tickfontsize=10)
 	loc, width = tp_sz_transition
 	#vline!([W(tp_sz_transition)]; label="Transition", color=:darkred, alpha=0.7)
 	vspan!(W([loc-width,loc+width]); label="Crossover", color=:darkred, alpha=0.7)
@@ -579,13 +687,96 @@ savefig(thouless_full_W, joinpath(SAVEPATH, "thouless_W.pdf"))
 # ╔═╡ da20058c-4073-4ac6-badd-00adfa0860eb
 hilberspacesize(N) = binomial(N,div(N-1,2))
 
+# ╔═╡ bbf4bd03-23eb-4dd9-b91c-d92eb3c4ff6a
+## include error of mean as ribbon
+## -> invisible
+entropy_main_W_errors = let p = plot(;xlabel="W", ylabel="Half-chain entropy", legend=:topright, xaxis=:log,
+		xlim=W_xlim)
+	xticks!(W_xticks, string.(W_xticks))
+	#color = Plots.colormap("RdBu", length(Ns)+3)[4:end]'
+	color = palette(:ice, length(Ns)+2, rev=true)[2:end]
+	plot!(p, W(ρvals), hce_means; palette=color, label=["N=$N" for N in Ns'], 
+		ribbon=hce_errorofmean .* sqrt.(hilberspacesize.(10:16))', fillalpha=0.2) 
+	# only consider statistical error of disorder -> _prep_vals also divided by #states so multiply back on
+	# this only happend for entropy because for the other indicators average is over eigenstate
+	# but for entropy it's actually over the cut location
+	p
+end
+
+# ╔═╡ bfc60db7-04c1-4934-a3de-c6b18d841a2f
+entropy_plot_full_W_new = let detailsat = reverse([9,40,45]),
+	details_color = palette(:Set2_3),
+	entropy_main = plot(entropy_main_W_errors; legend=false, labelfontsize=12, tickfontsize=10),
+	prediction_posdata = load_positions(:box_pbc,1,16;prefix=LOW_DENSITY)
+	# ,detail_plots = [entropy_subplot(1:7,at) for at in detailsat]
+
+	for (at, color) in zip(detailsat, details_color)
+		vline!(entropy_main, [W(ρvals[at])]; color, alpha = 0.9, ls=:dash, label=nothing)
+	end
+			
+	### Prediction
+	preddata_full = pair_entropy_prediction(prediction_posdata)
+	preddata_mean = vec(mean(preddata_full;dims=1))[1:end]
+	preddata_std = vec(std(preddata_full;dims=1))[1:end] ./ sqrt(size(preddata_full,1))
+	plot!(entropy_main, W(prediction_posdata.ρs)[1:end], preddata_mean;
+		ls = :dash, width=1, color=:red, label="prediction", ribbon=preddata_std, fillalpha=0.2)
+	# lens
+	p_lens = plot(entropy_main)
+	plot!(p_lens; legend=:outerleft, ylabel="Half-chain entropy", xlim=[1.05,2.75], ylim=[0.7,1.2], ticks=:native, tickfontsize=10, labelfontsize=12)
+	#p_lens = plot(;xlabel="W", legend=false, xaxis=:log, xlim=[1.5,2.0], ylim=[0.7,1.0])
+	xticks!(p_lens, 1.1:0.2:2.7, string.(1.1:0.2:2.7))
+	# plot!(p_lens, W(ρvals), hce_means; palette=palette(:ice, length(Ns)+2, rev=true)[2:end])
+	# plot!(p_lens, W(prediction_posdata.ρs)[1:23],
+	# 	vec(mean(pair_entropy_prediction(prediction_posdata);dims=1))[1:23];
+	# 	ls = :dot, width=2, color=:black, label="prediction")
+
+	# curve fits
+	fits = [curve_fit(pol1, Ns, hce_means[at,:], [1.0,0.5]) for at in detailsat]
+
+	fitdata = reduce(hcat, pol1(Ns,fit.param) for fit in fits)
+	fiterrors = reduce(hcat, pol1_error(Ns,fit.param,stderror(fit)) for fit in fits)
+
+	p_linfit = entropy_main
+	
+	plot!(p_linfit, Ns, fitdata; ribbon=fiterrors,
+		xlabel="N", label=false, palette=details_color,
+		inset=(1,bbox(0.38,0.05,0.55,0.6)), subplot=2)
+	scatter!(p_linfit, Ns, hce_means[detailsat,:]'; marker=:x, color=:black,label=false, legend=:right, subplot=2)
+
+	# inset legend
+	scatter!(p_linfit, [], []; marker=:x, color=:black, label="data", legend=:topleft, subplot=2)
+	plot!(p_linfit,[],[];ribbon=[], label="fit", color=:gray, subplot=2)
+	fit_to_annotation(p,color) = text("S=$(round(p[1];sigdigits=2)) + $(round(p[2];sigdigits=2))N"; pointsize=8, color,halign=:left)
+	texts = [fit_to_annotation(fit.param, details_color[i]) for (i,fit) in enumerate(fits)]
+	annotate!(p_linfit, [(14,4.6,texts[1]), (13,2.2,texts[2]),(11,1.15,texts[3])]; palette=details_color, subplot=2)
+
+	# draw lens effect
+	plot!(entropy_main, [2.5,1.05,1.05,2.5],[0.7,0.7,1.2,1.2]; color=:black, alpha=0.35, label=false)
+	#plot!(entropy_main, [0.0, 1.0],[0.0,1.0]; inset=(2,bbox(0.6,0.9,0.4,0.3)), label=false, color=:gray, axis=false, ticks=false, background=false, background_color=:transparent, subplot=3)	
+
+	#plot!(entropy_main, p_linfit; inset=(1,bbox(0.38,0.05,0.55,0.6)), subplot=2)
+	layout = grid(2,1; heights=(0.666,0.334))#[1;1]#@layout [a{0.5h};b]
+	#layout = Any[1;1]
+	savefig(plot!(entropy_main; title="(a)", titlelocation=:left, size=(600,400),subplot=1, dpi=200), joinpath(SAVEPATH, "entropy_new_part1.png"))
+	savefig(plot!(p_lens; title="(b)", titlelocation=:left, size=(550,200), dpi=200), joinpath(SAVEPATH, "entropy_new_part2.png"))
+	plot(plot!(entropy_main; title="(a)", subplot=1), 
+		 plot!(p_lens,title="(b)"); 
+		layout, dpi=200, size=(600,600), titlelocation=:left, margin_bottom=20Plots.mm)
+	# layout = @layout [a 
+	# 				  [b c]]
+	# plot(entropy_main, p_linfit, p_lens; layout, dpi=200)
+end
+
+# ╔═╡ 9b4520ca-472e-4e1d-b612-62064f65889d
+savefig(entropy_plot_full_W_new,joinpath(SAVEPATH, "hce_W_new.pdf"))
+
 # ╔═╡ f37acd5b-b8a4-4caf-91a0-9cba909e5a78
 md"""
 ## Entropy per cut
 """
 
 # ╔═╡ 5e099ce4-8f01-4087-bdb6-ba1d6ab23165
-let p = plot(;xlabel="Number of pairs N",ylabel="Entropy per cut", dpi=200)
+let p = plot(;xlabel="Number of pairs N",ylabel="Entropy per cut", dpi=200, labelfontsize=12, tickfontsize=10)
 	plot!(p, 3:20, entropy_per_cut.(3:20,0); label="r=0")
 	plot!(p, 4:20, entropy_per_cut.(4:20,1); label="r=1")
 	plot!(p, 5:20, entropy_per_cut.(5:20,2); label="r=2")
@@ -623,6 +814,8 @@ end
 # ╠═9d67a245-2d8f-48f7-81da-09b2993cda37
 # ╠═dadb5ab4-0e95-4366-84b1-ee2809313927
 # ╠═f0665d91-1f67-4716-87ce-a3ea3b9039bf
+# ╠═997543e2-a27f-479d-be8b-73d7b639b7f2
+# ╠═a5c221a6-c6c2-4301-b93b-7178859bcf68
 # ╠═0a4e0811-036d-46f5-ae89-8ffa7fb7ab1a
 # ╠═8b8bafa7-e325-4d36-9624-1e1efb6c972d
 # ╠═1301fc69-9d92-43c6-8274-eb3c11995b8b
@@ -631,7 +824,9 @@ end
 # ╠═4721cdab-edc9-42dc-9656-64534000ed35
 # ╠═5b30d6d4-6b12-4da3-b5f5-1e1170abaac5
 # ╠═a35f6334-1d05-4925-8c16-07b3c1c75130
+# ╠═44226e15-2f6d-4077-bb6e-d42ff7af5597
 # ╠═7e66c883-eb17-410f-b915-3d9b273af71b
+# ╠═5de08736-2542-4306-b2b2-caca4c611168
 # ╠═bdd0e16f-5615-477e-acf6-670ea51b2381
 # ╠═2eb28070-691f-4860-a7ac-87c2d9fb81d0
 # ╠═8a4d457c-f788-4c04-b84a-3734a4e3e865
@@ -639,6 +834,7 @@ end
 # ╠═aff5c4e6-8ed1-4b12-88b3-43e9ebdc617a
 # ╠═5e57efdc-5ae3-4a86-ae6d-9f0a49c4d5c7
 # ╠═21352df0-3493-48ef-865e-2f6b0614b0f4
+# ╠═aad4eeb4-8fdb-40e3-9301-49bd9a4de439
 # ╠═241ddd4b-f075-4785-b161-2192982f2137
 # ╠═fc0a8c34-1bc8-4003-8165-13a362257648
 # ╠═c4eae1f2-95c1-4114-a1dd-3b437414c189
@@ -649,13 +845,21 @@ end
 # ╠═d542da72-4c4a-4cfa-b490-4ae881e8538a
 # ╠═f9491876-b0cd-4f2d-9b9f-ca24283dfb44
 # ╠═99d387f0-ae7e-4ce4-8ad8-6c8bf95e3819
+# ╠═bbf4bd03-23eb-4dd9-b91c-d92eb3c4ff6a
 # ╠═5d930be7-5df7-47bf-be84-2a055106920b
 # ╠═f9abd6af-f125-41ef-915d-a73b041f9690
 # ╠═f73cc7af-6f60-48c2-bdf1-3de67260e9b6
+# ╠═07b2ef84-202b-4960-a5ab-af7c7be71f6a
+# ╠═6b5ad674-b541-45ec-8bbf-76543f77297f
+# ╠═bfc60db7-04c1-4934-a3de-c6b18d841a2f
+# ╠═ef28ab4b-e4fa-4188-913a-fb298b34b6e9
+# ╠═b6ebda19-4cb0-419f-a3ed-1525cb09a929
+# ╠═52c23938-f012-459b-9047-b103fe6a2fe7
 # ╠═9f8782a6-8c0b-45cb-94ec-64a07addb55b
 # ╠═a8b925f1-1763-43eb-9162-219b85ede984
 # ╠═895cace4-ae8b-4d39-8b76-3cdf09815940
 # ╠═9f63456f-9da1-4203-ad01-8d159ebd1bee
+# ╠═9b4520ca-472e-4e1d-b612-62064f65889d
 # ╟─300ae731-3551-43b8-ab40-924d521fdb7b
 # ╠═941cc59d-c4f3-45bf-885b-290a2a7634f2
 # ╠═67bf03ac-bc0c-4fce-afc9-edd8938925ee
