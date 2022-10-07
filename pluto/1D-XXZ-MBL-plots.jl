@@ -4,6 +4,11 @@
 using Markdown
 using InteractiveUtils
 
+# ╔═╡ 2a544bad-35cb-4229-b75e-8d3283b8c288
+md"""
+# Setup and base definitions
+"""
+
 # ╔═╡ d05f72ed-31ac-4983-b510-ce6d6527879a
 html"""
 <style>main { max-width: 40%;}</style>
@@ -17,14 +22,16 @@ tempdir = mkdir(tempname())
 begin
 	import Pkg
 	Pkg.activate(tempdir)
-	Pkg.add(["Plots", "PyPlot", "Statistics", "LinearAlgebra","LaTeXStrings","LsqFit","SpinSymmetry","PlutoUI"])
+	Pkg.add(["Plots", "PyPlot", "Statistics", "LinearAlgebra","LaTeXStrings","LsqFit","SpinSymmetry","PlutoUI","Bootstrap"])
 	Pkg.add(url="https://github.com/pablosanjose/FilteredMatrices.jl")
 	Pkg.add(path=expanduser("~/julia/XXZNumerics"))
 	Pkg.add(path=expanduser("~/julia/SimLib"))
-	using Plots,Statistics,LinearAlgebra,SimLib,LaTeXStrings,LsqFit,XXZNumerics,SpinSymmetry,PlutoUI
+	using Plots,Statistics,LinearAlgebra,SimLib,LaTeXStrings,LsqFit,XXZNumerics,SpinSymmetry,PlutoUI,Bootstrap
 	pyplot()
-	TableOfContents()
 end
+
+# ╔═╡ 4d171def-b37a-44ea-a192-03a88debe63c
+TableOfContents(indent=true)
 
 # ╔═╡ fc5ab3d2-acdd-47a7-bbdc-c40b28976907
 begin
@@ -76,6 +83,27 @@ begin
 		return (vals .- min) ./ (max-min)
 	end
 end
+
+# ╔═╡ ed2305f5-7bc9-43a8-b5eb-75b5a8c00eca
+begin
+	function nan_mask(data)
+		mask = trues(size(data))
+		mask[isnan.(data)] .= 0
+		return mask
+	end
+	
+	_ndim(arr) = length(size(arr))
+	_default_dims(arr) = Tuple(1:_ndim(arr))
+	mean_ignore_nan(data; dims=_default_dims(data)) = maskedmean(data, nan_mask(data); dims)
+	std_ignore_nan(data; dims=_default_dims(data)) = maskedstd(data, nan_mask(data); dims)
+	function error_of_mean_ignore_nan(data; dims=_default_dims(data))
+		mask = nan_mask(data)
+		return maskedstd(data, mask; dims) ./ sqrt.(sum(mask; dims))
+	end
+end
+
+# ╔═╡ da20058c-4073-4ac6-badd-00adfa0860eb
+hilberspacesize(N) = binomial(N,div(N-1,2))
 
 # ╔═╡ 48544d55-446d-4024-8bf9-fa428de11c0b
 Ns = [10,11,12,13,14,15,16]
@@ -133,26 +161,31 @@ W_xticks = [0.5; 0.6:0.2:2.0]
 
 # ╔═╡ bc11f188-7bd3-49f0-bb29-044d4f27de3c
 md"""
-## LSR
+# LSR
+"""
+
+# ╔═╡ 799f75b3-6bbd-4325-89b2-6a24f780f51a
+md"""
+## Load data
 """
 
 # ╔═╡ ac92e5e6-171e-4b8e-aca3-344c0d8ea1a9
 nancounterdrop(unused,mask;dims) = dropdims(mean(mask; dims);dims)
 
-# ╔═╡ e34fa01d-466b-48e4-9a10-5f0e592909cd
-lsr_nans = let lsr_means_high = hcat(_prep_vals.(load_lsr.(alpha6_high); dims=(1,2,3,4), func=nancounterdrop)...),
-	lsr_means_low  = hcat(_prep_vals.(load_lsr.(alpha6_low ); dims=(1,2,3,4),func=nancounterdrop)...)
-	vcat(lsr_means_low, lsr_means_high)[ρsortperm, :]
+# ╔═╡ 33b9ecab-6984-416a-8127-6367da4d04ef
+lsr_means, lsr_errorofmean = let lsr_shot_data_high = _prep_vals.(load_lsr.(alpha6_high); dims=(1,2,4)), #[N][shot,rho]
+	lsr_shot_data_low =
+	_prep_vals.(load_lsr.(alpha6_low ); dims=(1,2,4)) #[N][shot,rho]
+	lsr_shot_data = [hcat(low, high)[:,ρsortperm] for (low,high) in zip(lsr_shot_data_low,lsr_shot_data_high)] #[N][shot,rho]
+	means = hcat(vec.(mean_ignore_nan.(lsr_shot_data; dims=1))...) #[rho,N]
+	errorofmean = hcat(vec.(error_of_mean_ignore_nan.(lsr_shot_data; dims=1))...)
+	means, errorofmean
 end;
 
-# ╔═╡ 9d67a245-2d8f-48f7-81da-09b2993cda37
-plot(ρvals, lsr_nans; xaxis=:log, label=Ns')
-
-# ╔═╡ dadb5ab4-0e95-4366-84b1-ee2809313927
-lsr_means = let lsr_means_high = hcat(_prep_vals.(load_lsr.(alpha6_high); dims=(1,2,3,4))...),
-	lsr_means_low  = hcat(_prep_vals.(load_lsr.(alpha6_low ); dims=(1,2,3,4))...)
-	vcat(lsr_means_low, lsr_means_high)[ρsortperm, :]
-end;
+# ╔═╡ 336c5f98-71a9-40e8-9821-7c56033a40f9
+md"""
+## Make and save plots
+"""
 
 # ╔═╡ f0665d91-1f67-4716-87ce-a3ea3b9039bf
 lsr_main_W = let p = plot(;xlabel="W", ylabel=L"\langle r \rangle", legend=:topright, xaxis=:log, xlim=W_xlim)
@@ -164,15 +197,9 @@ lsr_main_W = let p = plot(;xlabel="W", ylabel=L"\langle r \rangle", legend=:topr
 	p
 end
 
-# ╔═╡ 997543e2-a27f-479d-be8b-73d7b639b7f2
-## error of mean as ribbon
-## barely visible
-lsr_errorofmean = let lsr_means_high = hcat(_prep_vals.(load_lsr.(alpha6_high); dims=(1,2,3,4), func=errorofmeandrop)...),
-	lsr_means_low  = hcat(_prep_vals.(load_lsr.(alpha6_low ); dims=(1,2,3,4), func=errorofmeandrop)...)
-	vcat(lsr_means_low, lsr_means_high)[ρsortperm, :]
-end;
-
 # ╔═╡ a5c221a6-c6c2-4301-b93b-7178859bcf68
+## error of mean as ribbon
+## not visible
 let p = plot(;xlabel="W", ylabel=L"\langle r \rangle", legend=:topright, xaxis=:log, xlim=W_xlim)
 	xticks!(W_xticks, string.(W_xticks))
 	hline!(p, [0.5295]; label="GOE", ls=:dash, width=2, color=:limegreen)
@@ -202,7 +229,12 @@ savefig(lsr_full_W, joinpath(SAVEPATH, "lsr_W.pdf"))
 
 # ╔═╡ 7f082cf1-12e8-4134-a6e3-371af39164c7
 md"""
-## PR
+# PR
+"""
+
+# ╔═╡ 81071ead-3233-42bc-a7cb-c0aa4fc33ffe
+md"""
+## Load data
 """
 
 # ╔═╡ 80e82ba2-8a72-4ba9-9828-42aea93ba3bd
@@ -214,66 +246,40 @@ pr_edds_low = filter(edd->iseven(edd.system_size), alpha6_low)
 # ╔═╡ 5b30d6d4-6b12-4da3-b5f5-1e1170abaac5
 pr_Ns = getproperty.(pr_edds_high, :system_size)
 
-# ╔═╡ a35f6334-1d05-4925-8c16-07b3c1c75130
-pr_means_zbasis = let pr_means_high =
-	[_prep_vals(load(PRDataDescriptor(ZBasis(), edd)); dims=(1,2,3,4)) for edd in alpha6_high]
-	pr_means_low =
-	[_prep_vals(load(PRDataDescriptor(ZBasis(), edd)); dims=(1,2,3,4)) for edd in alpha6_low]
-	vcat(hcat(pr_means_low...), hcat(pr_means_high...))[ρsortperm, :]
+# ╔═╡ bbea8da3-c3a5-440a-875d-99ea1293e546
+pr_means_zbasis, pr_errorofmean_zbasis = let pr_shot_data_high = [_prep_vals(load(PRDataDescriptor(ZBasis(), edd)); dims=(1,2,4)) for edd in alpha6_high], #[N][shot,rho]
+	pr_shot_data_low =
+	[_prep_vals(load(PRDataDescriptor(ZBasis(), edd)); dims=(1,2,4)) for edd in alpha6_low] #[N][shot,rho]
+	pr_shot_data = [hcat(low, high)[:,ρsortperm] for (low,high) in zip(pr_shot_data_low,pr_shot_data_high)] #[N][shot,rho]
+	means = hcat(vec.(mean_ignore_nan.(pr_shot_data; dims=1))...) #[rho,N]
+	errorofmean = hcat(vec.(error_of_mean_ignore_nan.(pr_shot_data; dims=1))...)
+	means, errorofmean
 end;
 
-# ╔═╡ 44226e15-2f6d-4077-bb6e-d42ff7af5597
-pr_errorofmean_zbasis = let pr_means_high =
-	[_prep_vals(load(PRDataDescriptor(ZBasis(), edd)); dims=(1,2,3,4), func=errorofmeandrop) for edd in alpha6_high]
-	pr_means_low =
-	[_prep_vals(load(PRDataDescriptor(ZBasis(), edd)); dims=(1,2,3,4), func=errorofmeandrop) for edd in alpha6_low]
-	vcat(hcat(pr_means_low...), hcat(pr_means_high...))[ρsortperm, :]
+# ╔═╡ b1e54703-202c-47a1-8a15-c8f4e86e9387
+pr_means_pairs, pr_errorofmean_pairs = let pr_shot_data_high = [_prep_vals(load(PRDataDescriptor(PairBasis(edd.system_size,PetersMethod()), edd)); dims=(1,2,4)) for edd in pr_edds_high], #[N][shot,rho]
+	pr_shot_data_low =
+	[_prep_vals(load(PRDataDescriptor(PairBasis(edd.system_size,PetersMethod()), edd)); dims=(1,2,4)) for edd in pr_edds_low] #[N][shot,rho]
+	pr_shot_data = [hcat(low, high)[:,ρsortperm] for (low,high) in zip(pr_shot_data_low,pr_shot_data_high)] #[N][shot,rho]
+	means = hcat(vec.(mean.(pr_shot_data; dims=1))...) #[rho,N]
+	errorofmean = hcat(vec.(std.(pr_shot_data; dims=1)) ./ sqrt.(size.(pr_shot_data, 1))...)
+	means, errorofmean
 end;
 
-# ╔═╡ 7e66c883-eb17-410f-b915-3d9b273af71b
-pr_means_pairs = let pr_means_high =
-	[_prep_vals(load(PRDataDescriptor(PairBasis(edd.system_size,PetersMethod()), edd)); dims=(1,2,3,4)) for edd in pr_edds_high]
-	pr_means_low =
-	[_prep_vals(load(PRDataDescriptor(PairBasis(edd.system_size,PetersMethod()), edd)); dims=(1,2,3,4)) for edd in pr_edds_low]
-	vcat(hcat(pr_means_low...), hcat(pr_means_high...))[ρsortperm, :]
-end;
+# ╔═╡ c4eae1f2-95c1-4114-a1dd-3b437414c189
+function pr_pairbasis(N)
+	symm = symmetrized_basis(N,div(N-1,2))
+	pairbasis = SimLib.PRModule.construct_basis(PairBasis(N,PetersMethod()))
+	return mean(participation_ratio(symmetrize_operator(pairbasis,symm)))
+end
 
-# ╔═╡ 5de08736-2542-4306-b2b2-caca4c611168
-pr_errorofmean_pairs = let pr_means_high =
-	[_prep_vals(load(PRDataDescriptor(PairBasis(edd.system_size,PetersMethod()), edd)); dims=(1,2,3,4), func=errorofmeandrop) for edd in pr_edds_high]
-	pr_means_low =
-	[_prep_vals(load(PRDataDescriptor(PairBasis(edd.system_size,PetersMethod()), edd)); dims=(1,2,3,4), func=errorofmeandrop) for edd in pr_edds_low]
-	vcat(hcat(pr_means_low...), hcat(pr_means_high...))[ρsortperm, :]
-end;
+# ╔═╡ aef7cc15-7c6a-4f17-b6aa-5d6398ba8487
+PR_zbasis_vs_pairs = pr_pairbasis.(pr_Ns)
 
-# ╔═╡ bdd0e16f-5615-477e-acf6-670ea51b2381
-pr_means_naive_shots = let pr_means_high =
-	[_prep_vals(load(PRDataDescriptor(PairBasis(edd.system_size, NaivePairing(false)), edd)); dims=(1,2,4)) for edd in pr_edds_high]
-	pr_means_low =
-	[_prep_vals(load(PRDataDescriptor(PairBasis(edd.system_size, NaivePairing(false)), edd)); dims=(1,2,4)) for edd in pr_edds_low]
-	[pr_means_low, pr_means_high]#[high_low][Ns][shots, ρ]
-end;
-
-# ╔═╡ 2eb28070-691f-4860-a7ac-87c2d9fb81d0
-pr_means_naive2_shots = let pr_means_high =
-	[_prep_vals(load(PRDataDescriptor(PairBasis(edd.system_size, NaivePairing(true)), edd)); dims=(1,2,4)) for edd in pr_edds_high]
-	pr_means_low =
-	[_prep_vals(load(PRDataDescriptor(PairBasis(edd.system_size, NaivePairing(true)), edd)); dims=(1,2,4)) for edd in pr_edds_low]
-	[pr_means_low, pr_means_high]#[high_low][Ns][shots, ρ]
-end;
-
-# ╔═╡ 8a4d457c-f788-4c04-b84a-3734a4e3e865
-pr_means_naive = mapreduce(Ndata->hcat(SimLib.meandrop.(Ndata;dims=1)...), vcat, pr_means_naive_shots)[ρsortperm, :];
-
-# ╔═╡ 21752b81-f146-4ffb-8cfd-627e63266610
-pr_means_naive2 = mapreduce(Ndata->hcat(SimLib.meandrop.(Ndata;dims=1)...), vcat, pr_means_naive2_shots)[ρsortperm, :];
-
-# ╔═╡ aff5c4e6-8ed1-4b12-88b3-43e9ebdc617a
-pr_means_naive_lowest =
-	mapreduce(vcat, zip(pr_means_naive_shots,pr_means_naive2_shots)) do rhoblock #[[N1,N2,...],...]
-		mapreduce(arrs->SimLib.meandrop(min.(arrs...);dims=1),hcat, zip(rhoblock...))
-	end
-
+# ╔═╡ 9db9970d-436b-46d5-bc9b-65477dc529f1
+md"""
+## Make and save plots
+"""
 
 # ╔═╡ 5e57efdc-5ae3-4a86-ae6d-9f0a49c4d5c7
 begin
@@ -291,7 +297,6 @@ end
 pr_main_W = let Ns = pr_Ns[end-pr_lines_in_overview+1:end],
 	pr_means_zbasis = pr_means_zbasis[:, end-pr_lines_in_overview*2+2:2:end],
 	pr_means_pairs = pr_means_pairs[:, end-pr_lines_in_overview+1:end],
-	pr_means_naive = pr_means_naive[:,end-pr_lines_in_overview+1:end],
 	palette = pr_palette,
 	p = plot(;xlabel="W", ylabel=L"\mathrm{PR}/|\mathcal{H}|", legend=:topright, yaxis=:log, xlim=W_xlim)
 	xticks!(W_xticks, string.(W_xticks))
@@ -299,8 +304,6 @@ pr_main_W = let Ns = pr_Ns[end-pr_lines_in_overview+1:end],
 		palette, label=["z-basis N=$N" for N in Ns'])
 	plot!(p, W(ρvals), pr_means_pairs ./ binomial.(Ns, div.(Ns .- 1, 2))';
 		palette, label=["pair-basis N=$N" for N in Ns'], ls=:dash)
-	# plot!(p, W(ρvals), pr_means_naive ./ binomial.(Ns, div.(Ns .- 1, 2))';
-	# 	palette, label=["N=$N" for N in Ns'])
 	p
 end
 
@@ -312,7 +315,6 @@ let Ns = pr_Ns[end-pr_lines_in_overview+1:end],
 	pr_eom_zbasis = pr_errorofmean_zbasis[:, end-pr_lines_in_overview*2+2:2:end],
 	pr_means_pairs = pr_means_pairs[:, end-pr_lines_in_overview+1:end],
 	pr_eom_pairs = pr_errorofmean_pairs[:, end-pr_lines_in_overview+1:end],
-	pr_means_naive = pr_means_naive[:,end-pr_lines_in_overview+1:end],
 	palette = pr_palette,
 	p = plot(;xlabel="W", ylabel=L"\mathrm{PR}/|\mathcal{H}|", legend=:topright, yaxis=:log, xlim=W_xlim)
 	xticks!(W_xticks, string.(W_xticks))
@@ -322,49 +324,82 @@ let Ns = pr_Ns[end-pr_lines_in_overview+1:end],
 	plot!(p, W(ρvals), pr_means_pairs ./ binomial.(Ns, div.(Ns .- 1, 2))';
 		palette, label=["pair-basis N=$N" for N in Ns'], ls=:dash,
 		ribbon = pr_eom_pairs ./ binomial.(Ns, div.(Ns .- 1, 2))')
-	# plot!(p, W(ρvals), pr_means_naive ./ binomial.(Ns, div.(Ns .- 1, 2))';
-	# 	palette, label=["N=$N" for N in Ns'])
 	p
 end
 
-# ╔═╡ c4eae1f2-95c1-4114-a1dd-3b437414c189
-function pr_pairbasis(N)
-	symm = symmetrized_basis(N,div(N-1,2))
-	pairbasis = SimLib.PRModule.construct_basis(PairBasis(N,PetersMethod()))
-	return mean(participation_ratio(symmetrize_operator(pairbasis,symm)))
-end
-
-# ╔═╡ aef7cc15-7c6a-4f17-b6aa-5d6398ba8487
-PR_zbasis_vs_pairs = pr_pairbasis.(pr_Ns)
-
 # ╔═╡ 97bf13c5-cfc2-4554-925d-759444bf3a45
 md"""
-## Entropy
+# Entropy
 """
 
-# ╔═╡ 15646ef5-cf1d-4a14-8fa9-4bc5e0842272
-hce_means = let hcedds_high = HCEDataDescriptor.(div.(Ns, 2), alpha6_high),
-	hcedds_low = HCEDataDescriptor.(div.(Ns, 2), alpha6_low),
-	hce_means_high = hcat(_prep_vals.(load.(hcedds_high; prefix=HIGH_DENSITY); dims=(1,2,3,4,5))...),
-	hce_means_low = hcat(_prep_vals.(load.(hcedds_low; prefix=LOW_DENSITY); dims=(1,2,3,4,5))...)
-	vcat(hce_means_low, hce_means_high)[ρsortperm, :]
-end;
+# ╔═╡ 0f802771-29b5-472d-bcee-c6987bd97aea
+md"""
+## Load data
+"""
 
-# ╔═╡ d542da72-4c4a-4cfa-b490-4ae881e8538a
-hce_std = let hcedds_high = HCEDataDescriptor.(div.(Ns, 2), alpha6_high),
+# ╔═╡ eb5b02be-5195-47b0-a300-f4071e0f56c3
+hce_shot_data = let hcedds_high = HCEDataDescriptor.(div.(Ns, 2), alpha6_high),
 	hcedds_low = HCEDataDescriptor.(div.(Ns, 2), alpha6_low),
-	hce_means_high = hcat(_prep_vals.(load.(hcedds_high; prefix=HIGH_DENSITY); dims=(1,2,3,4,5), func=stddrop)...),
-	hce_means_low = hcat(_prep_vals.(load.(hcedds_low; prefix=LOW_DENSITY); dims=(1,2,3,4,5), func=stddrop)...)
-	vcat(hce_means_low, hce_means_high)[ρsortperm, :]
-end;
+	hce_shots_high = _prep_vals.(load.(hcedds_high; prefix=HIGH_DENSITY); dims=(1,2,3,5)),
+	hce_shots_low = _prep_vals.(load.(hcedds_low; prefix=LOW_DENSITY); dims=(1,2,3,5)) #[N][shot,rho_low]
+	[hcat(low, high)[:,ρsortperm] for (low,high) in zip(hce_shots_low,hce_shots_high)]
+end; # [N][shot,rho]
 
-# ╔═╡ f9491876-b0cd-4f2d-9b9f-ca24283dfb44
-hce_errorofmean = let hcedds_high = HCEDataDescriptor.(div.(Ns, 2), alpha6_high),
-	hcedds_low = HCEDataDescriptor.(div.(Ns, 2), alpha6_low),
-	hce_means_high = hcat(_prep_vals.(load.(hcedds_high; prefix=HIGH_DENSITY); dims=(1,2,3,4,5), func=errorofmeandrop)...),
-	hce_means_low = hcat(_prep_vals.(load.(hcedds_low; prefix=LOW_DENSITY); dims=(1,2,3,4,5), func=errorofmeandrop)...)
-	vcat(hce_means_low, hce_means_high)[ρsortperm, :]
-end;
+# ╔═╡ b3ca4a97-d758-4fa5-b881-fc34063b5a28
+hce_means = hcat(vec.(mean_ignore_nan.(hce_shot_data;dims=1))...); # [rho,N]
+
+# ╔═╡ 6ea0c192-202f-472a-a7f0-51a1a8e72256
+hce_std, hce_errorofmean, hce_std_std = let bs_std=zeros(size(hce_shot_data[1],2), length(hce_shot_data)), bs_eom = zeros(size(bs_std)), bs_std_std = zeros(size(bs_std))
+	for (i, data) in enumerate(hce_shot_data)
+		for (j, col) in enumerate(eachcol(data))
+			mask = nan_mask(col)
+			bs = bootstrap(std, col[mask], BasicSampling(10000))
+			bs_std[j,i] = original(bs)[1]
+			bs_eom[j,i] = original(bs)[1] / sqrt(sum(mask))
+			bs_std_std[j,i] = stderror(bs)[1]
+		end
+		@info "$i done"
+	end
+	bs_std, bs_eom, bs_std_std
+end; # [rho,N], [rho,N]
+
+# ╔═╡ 05ccfc6e-92c2-45b5-b49d-ead83bf1ad4c
+md"""
+## Pair prediction code
+"""
+
+# ╔═╡ 895cace4-ae8b-4d39-8b76-3cdf09815940
+entropy_per_cut(N,r) = 2* (N^2-r^2)/(4N^2-2N)
+
+# ╔═╡ a8b925f1-1763-43eb-9162-219b85ede984
+function _cut_prediction(posdata)
+	interaction = PowerLaw(6)
+	N = posdata.system_size
+	pbc_pairsize(x) = min(x[2]-x[1], N-x[2]+x[1])
+
+	res = zeros(posdata.shots, length(posdata.ρs))
+	for (i,ρ) in enumerate(posdata.ρs)
+		geom = geometry_from_density(posdata.geometry, ρ, posdata.system_size,1)
+		for j in 1:posdata.shots
+			clust = SimLib.PRModule.peters_clustering!(interaction_matrix(interaction, geom, posdata.data[:,:,j,i]))
+			res[j,i] = sum(pbc_pairsize, clust)
+		end
+	end
+	return res
+end
+
+# ╔═╡ 9f8782a6-8c0b-45cb-94ec-64a07addb55b
+function pair_entropy_prediction(posdata)
+	N = posdata.system_size
+	number_of_pair_cuts = 2*_cut_prediction(posdata)
+	value_of_cut_pair = entropy_per_cut(N÷2,1)
+	return number_of_pair_cuts .* value_of_cut_pair ./ N
+end
+
+# ╔═╡ 0504d150-3841-4a44-9d06-f5d27b3f9b39
+md"""
+## Make and save plots
+"""
 
 # ╔═╡ 99d387f0-ae7e-4ce4-8ad8-6c8bf95e3819
 entropy_main_W = let p = plot(;xlabel="W", ylabel="Half-chain entropy", legend=:topright, xaxis=:log,
@@ -374,6 +409,22 @@ entropy_main_W = let p = plot(;xlabel="W", ylabel="Half-chain entropy", legend=:
 	color = palette(:ice, length(Ns)+2, rev=true)[2:end]
 	plot!(p, W(ρvals), hce_means; palette=color, label=["N=$N" for N in Ns'])
 	p#
+end
+
+# ╔═╡ bbf4bd03-23eb-4dd9-b91c-d92eb3c4ff6a
+## include error of mean as ribbon
+## -> invisible
+entropy_main_W_errors = let p = plot(;xlabel="W", ylabel="Half-chain entropy", legend=:topright, xaxis=:log,
+		xlim=W_xlim)
+	xticks!(W_xticks, string.(W_xticks))
+	#color = Plots.colormap("RdBu", length(Ns)+3)[4:end]'
+	color = palette(:ice, length(Ns)+2, rev=true)[2:end]
+	plot!(p, W(ρvals), hce_means; palette=color, label=["N=$N" for N in Ns'], 
+		ribbon=hce_errorofmean, fillalpha=0.2) 
+	# only consider statistical error of disorder -> _prep_vals also divided by #states so multiply back on
+	# this only happend for entropy because for the other indicators average is over eigenstate
+	# but for entropy it's actually over the cut location
+	p
 end
 
 # ╔═╡ 5d930be7-5df7-47bf-be84-2a055106920b
@@ -386,8 +437,8 @@ pr_side = let index = pr_linfit_index,
 	pairbasis_color = pr_palette[5],
 	p0 = [0.0,0.1],#[0.5,-0.25],
 	norms = binomial.(pr_Ns, div.(pr_Ns .- 1, 2)),
-	zbasis_data = pr_means_zbasis[index,:],# ./ norms,
-	pairs_data = pr_means_pairs[index,:],# ./ norms,
+	zbasis_data = pr_means_zbasis[index,:],
+	pairs_data = pr_means_pairs[index,:],
 	zbasis_fit = curve_fit(pol1, Ns, log10.(zbasis_data), p0),
 	pairs_fit = curve_fit(pol1, pr_Ns, log10.(pairs_data), p0),
 	p = plot(; yaxis=:log, legend=:topleft, xlabel="N",ylabel="PR")
@@ -421,47 +472,6 @@ savefig(pr_full_W, joinpath(SAVEPATH, "pr_W.pdf"))
 
 # ╔═╡ f9abd6af-f125-41ef-915d-a73b041f9690
 pol1_error(x,p,perr) = @. sqrt(x^2 * perr[2]^2 + perr[1]^2)
-
-# ╔═╡ 6b5ad674-b541-45ec-8bbf-76543f77297f
-# rote linie nach links
-# hce fällt etwas unter prediction -> pp nicht perfekt -> gibt abweichungen, siehe auch PR
-
-# ╔═╡ ef28ab4b-e4fa-4188-913a-fb298b34b6e9
-grid(2,1; heights=(0.7,0.3))
-
-# ╔═╡ b6ebda19-4cb0-419f-a3ed-1525cb09a929
-(@layout [a{0.6h, 0.1w}; b])[1]
-
-# ╔═╡ 52c23938-f012-459b-9047-b103fe6a2fe7
-[1;"a"]
-
-# ╔═╡ a8b925f1-1763-43eb-9162-219b85ede984
-function _cut_prediction(posdata)
-	interaction = PowerLaw(6)
-	N = posdata.system_size
-	pbc_pairsize(x) = min(x[2]-x[1], N-x[2]+x[1])
-
-	res = zeros(posdata.shots, length(posdata.ρs))
-	for (i,ρ) in enumerate(posdata.ρs)
-		geom = geometry_from_density(posdata.geometry, ρ, posdata.system_size,1)
-		for j in 1:posdata.shots
-			clust = SimLib.PRModule.peters_clustering!(interaction_matrix(interaction, geom, posdata.data[:,:,j,i]))
-			res[j,i] = sum(pbc_pairsize, clust)
-		end
-	end
-	return res
-end
-
-# ╔═╡ 895cace4-ae8b-4d39-8b76-3cdf09815940
-entropy_per_cut(N,r) = 2* (N^2-r^2)/(4N^2-2N)
-
-# ╔═╡ 9f8782a6-8c0b-45cb-94ec-64a07addb55b
-function pair_entropy_prediction(posdata)
-	N = posdata.system_size
-	number_of_pair_cuts = 2*_cut_prediction(posdata)
-	value_of_cut_pair = entropy_per_cut(N÷2,1)
-	return number_of_pair_cuts .* value_of_cut_pair ./ N
-end
 
 # ╔═╡ f73cc7af-6f60-48c2-bdf1-3de67260e9b6
 entropy_plot_full_W = let detailsat = reverse([9,40,45]),
@@ -498,210 +508,8 @@ entropy_plot_full_W = let detailsat = reverse([9,40,45]),
 		ls = :dot, width=2, color=:black, label="prediction")
 end
 
-# ╔═╡ 07b2ef84-202b-4960-a5ab-af7c7be71f6a
-let detailsat = reverse([9,40,45]),
-	details_color = palette(:Set2_3),
-	entropy_main = plot(entropy_main_W; legend=:bottomleft, dpi=200),
-	prediction_posdata = load_positions(:box_pbc,1,16;prefix=LOW_DENSITY)
-	# ,detail_plots = [entropy_subplot(1:7,at) for at in detailsat]
-
-	for (at, color) in zip(detailsat, details_color)
-		vline!(entropy_main, [W(ρvals[at])]; color, alpha = 0.9, ls=:dash, label=nothing)
-	end
-
-	fits = [curve_fit(pol1, Ns, hce_means[at,:], [1.0,0.5]) for at in detailsat]
-
-	fitdata = reduce(hcat, pol1(Ns,fit.param) for fit in fits)
-	fiterrors = reduce(hcat, pol1_error(Ns,fit.param,stderror(fit)) for fit in fits)
-
-	plot!(entropy_main, Ns, fitdata; ribbon=fiterrors,
-		xlabel="N", label=false, palette=details_color,
-		inset=(1,bbox(0.38,0.05,0.55,0.3)), subplot=2)
-	scatter!(entropy_main, Ns, hce_means[detailsat,:]'; marker=:x, color=:black,
-		subplot=2, label=false, legend=:right)
-
-	# inset legend
-	scatter!(entropy_main, [], []; marker=:x, color=:black, subplot=2, label="data", legend=:topleft)
-	plot!(entropy_main,[],[];ribbon=[], label="fit", subplot=2, color=:gray)
-	fit_to_annotation(p,color) = text("S=$(round(p[1];sigdigits=2)) + $(round(p[2];sigdigits=2))N"; pointsize=8, color,halign=:left)
-	texts = [fit_to_annotation(fit.param, details_color[i]) for (i,fit) in enumerate(fits)]
-	annotate!(entropy_main, [(14,4.4,texts[1]), (13,2,texts[2]),(11,1.15,texts[3])];subplot=2, palette=details_color)
-			
-	### Prediction
-	plot!(entropy_main, W(prediction_posdata.ρs)[1:23],
-		vec(mean(pair_entropy_prediction(prediction_posdata);dims=1))[1:23];
-		ls = :dot, width=2, color=:black, label="prediction")
-
-	# lens
-	lens!(entropy_main, [1.6,2.0], [0.7,1.0] ; inset = (1, bbox(0.38, 0.42, 0.55, 0.3)), subplot=3)
-end
-
-# ╔═╡ 9f63456f-9da1-4203-ad01-8d159ebd1bee
-savefig(entropy_plot_full_W,joinpath(SAVEPATH, "hce_W.pdf"))
-
-# ╔═╡ 300ae731-3551-43b8-ab40-924d521fdb7b
-md"""
-### Entropy Variance
-"""
-
-# ╔═╡ 941cc59d-c4f3-45bf-885b-290a2a7634f2
-entropy_var_main_W = let p = plot(;xlabel="W", ylabel="Half-chain entropy std.dev", legend=:topleft, xaxis=:log, xlim=W_xlim)
-	xticks!(W_xticks, string.(W_xticks))
-	color = palette(:ice, length(Ns)+2, rev=true)[2:end]
-	plot!(p, W(ρvals), hce_std; palette=color, label=["N=$N" for N in Ns'])
-	p
-end
-
-# ╔═╡ 67bf03ac-bc0c-4fce-afc9-edd8938925ee
-entropy_var_full_parabola_W = let fitrange = 38:42,
-	fitplotrange = fitrange,
-	p = plot(entropy_var_main_W; legend=:outside, legendposition=(1.0,0.0), dpi=200, tickfontsize=10, labelfontsize=12)
-	@. model(x, p) = p[1] + p[2]*(x-p[3])^2
-
-	fits = [curve_fit(model, W(ρvals[fitrange]), col[fitrange], [1.0, -30, 0.7]) for col in eachcol(hce_std)]
-	for fit in fits
-		@show fit.param
-	end
-	fitplots = [model(W(ρvals[fitplotrange]), fit.param) for fit in fits]
-	maxima_loc = [fit.param[3] for fit in fits]
-	maxima_val = [fit.param[1] for fit in fits]
-	maxima_std = [stderror(fit)[3] for fit in fits]
-
-	plot!(p, W(ρvals[fitplotrange]), fitplots; color=:black, ls=:dash, alpha=0.9, label=false)
-	plot!(p, [], []; color=:black, ls=:dash, alpha=0.9, label="Quad. fit")
-		#label=reshape(["$(round(fit.param[3];sigdigits=4)) ± $(round(stderror(fit)[3];sigdigits=1))" for fit in fits], 1, :))
-	scatter!(p, maxima_loc, maxima_val; label="Maxima", marker=:x, color=:black)
-
-	plot!(p, Ns, maxima_loc; yerror=maxima_std,
-	 	legend=nothing, xlabel="N",ylabel=L"W_{max}", inset=(1,bbox(0.65,0.05,0.5,0.35)), subplot=2)
-	hline!(p, [1/(2*0.7475979202)];subplot=2,color=:black, ls=:dot,width=1,label="Reyni limit"	)
-	annotate!(p, [(15.2, 0.666, ("Rényi limit",8))]; subplot=2)
-	# inset = plot!(p, Ns, maxima_loc; yerror=maxima_std,
-	# 	inset=(1,bbox(0.14,0.05,0.4,0.3)), subplot=2, legend=nothing, xlabel="N",ylabel="Maximum")
-
-	p
-end
-
-# ╔═╡ c60ded9a-a363-4f99-96a9-9f073065a8c4
-savefig(entropy_var_full_parabola_W, joinpath(SAVEPATH, "entropy_variance_W.pdf"))
-
-# ╔═╡ c2f1cdc5-a6e8-4fbf-909f-bfb966709ddb
-md"""
-## Thouless Parameter
-"""
-
-# ╔═╡ 81f27a5a-9765-4f16-9174-cd7e217e7a41
-tp_means_sz = let pr_means_high = hcat(_prep_vals.(load_el.("sz", alpha6_high); dims=(1,2,3,4))...),
-	pr_means_low  = hcat(_prep_vals.(load_el.("sz", alpha6_low ); dims=(1,2,3,4))...)
-	vcat(pr_means_low, pr_means_high)[ρsortperm, :]
-end;
-
-# ╔═╡ 20721250-f8e6-4c55-8b8d-d2d20db10602
-tp_means_szsz = let pr_means_high = hcat(_prep_vals.(load_el.("szsz", alpha6_high); dims=(1,2,3,4))...),
-	pr_means_low  = hcat(_prep_vals.(load_el.("szsz", alpha6_low ); dims=(1,2,3,4))...)
-	vcat(pr_means_low, pr_means_high)[ρsortperm, :]
-end;
-
-# ╔═╡ e30bae01-4922-4dc6-82ce-28f5d8b4e368
-tp_means_hop = let pr_means_high = hcat(_prep_vals.(load_el.("hopping", alpha6_high); dims=(1,2,3,4))...),
-	pr_means_low  = hcat(_prep_vals.(load_el.("hopping", alpha6_low ); dims=(1,2,3,4))...)
-	vcat(pr_means_low, pr_means_high)[ρsortperm, :]
-end;
-
-# ╔═╡ b5d37d9f-7c44-4218-9e0b-1cb6e4915ad3
-interpolate(x1,x2, steps=201) = x1 == x2 ? [x1] : collect(range(x1,x2; length=steps))
-
-# ╔═╡ 1376a743-1355-49a5-977d-264e63bc0881
-function tp_min_variance(data,ρs; iterations=5)
-	for i in 1:iterations
-		means_spread = SimLib.stddrop(data, dims=2)
-		minind = argmin(means_spread)
-		i == iterations && return ρs[minind]
-		left = max(1,minind-1)
-		right = min(minind+1,length(ρs))
-		data = hcat(interpolate(data[left,:], data[minind,:])...,
-			interpolate(data[minind, :], data[right, :])...)'
-		ρs = vcat(interpolate(ρs[left,:], ρs[minind,:])...,
-			interpolate(ρs[minind, :], ρs[right, :])...)
-	end
-end
-
-# ╔═╡ f69d1bb5-20cf-416f-a581-4acb56676783
-function tp_find_transition(data, ρs)
-	transition = tp_min_variance(data,ρs)
-	two_line_intersections = [tp_min_variance(data[:,[i,j]],ρs) for i in 1:size(data,2) for j in i+1:size(data,2)]
-	return [transition, std(two_line_intersections)]
-end
-
-# ╔═╡ 5d1d0e06-5269-4b65-ba36-c71ef6afaa52
-begin
-	tp_transition_window = 20:length(ρvals)-3
-	tp_sz_transition = tp_find_transition(tp_means_sz[tp_transition_window, :], ρvals[tp_transition_window])
-	tp_szsz_transition = tp_find_transition(tp_means_szsz[tp_transition_window, :], ρvals[tp_transition_window])
-	tp_hop_transition = tp_find_transition(tp_means_hop[tp_transition_window, :], ρvals[tp_transition_window])
-end
-
-# ╔═╡ 99dbe4d7-2919-4677-8f97-0566ff66b146
-tp_N_window = 1
-
-# ╔═╡ 01cb22ef-1d44-4910-8e0c-77da2411081d
-begin
-	tp_sz_transitions = hcat([tp_find_transition(tp_means_sz[tp_transition_window, (i-tp_N_window):(i+tp_N_window)], ρvals[tp_transition_window]) for i in (1+tp_N_window):(length(Ns)-tp_N_window)]...)'
-	tp_szsz_transitions = hcat([tp_find_transition(tp_means_szsz[tp_transition_window, (i-tp_N_window):(i+tp_N_window)], ρvals[tp_transition_window]) for i in (1+tp_N_window):(length(Ns)-tp_N_window)]...)'
-	tp_hop_transitions = hcat([tp_find_transition(tp_means_hop[tp_transition_window, (i-tp_N_window):(i+tp_N_window)], ρvals[tp_transition_window]) for i in (1+tp_N_window):(length(Ns)-tp_N_window)]...)'
-end
-
-# ╔═╡ 6a05e029-0b39-4ea5-a7ef-e52defbe771e
-tp_nans = let pr_means_high = hcat(_prep_vals.(load_el.("hopping", alpha6_high); dims=(1,2,3,4), func=nancounterdrop)...),
-	pr_means_low  = hcat(_prep_vals.(load_el.("hopping", alpha6_low ); dims=(1,2,3,4), func=nancounterdrop)...)
-	vcat(pr_means_low, pr_means_high)[ρsortperm, :]
-end;
-
-# ╔═╡ 1b3e8683-02b7-45a1-a65e-cd74083bb2c5
-tp_sz_transition
-
-# ╔═╡ 30100b77-d704-4f7e-9aea-9a2953b86c3b
-thouless_main_W = let p = plot(;xlabel="W", ylabel="Thouless parameter \$\\mathcal{G}\$", legend=:topright, xaxis=log, xlim=W_xlim)
-	xticks!(p, W_xticks, string.(W_xticks))
-	color = palette(:ice, length(Ns)+3; rev=true)[2:end]
-	plot!(p, W(ρvals), tp_means_sz; palette=color, label=["N=$N" for N in Ns'])
-	p
-end
-
-# ╔═╡ 5a366799-c8a1-4fe5-afe2-909524e30e5e
-thouless_full_W = let p = plot(thouless_main_W; dpi=200, legend=:topright, legend_columns=-1, tickfontsize=10)
-	loc, width = tp_sz_transition
-	#vline!([W(tp_sz_transition)]; label="Transition", color=:darkred, alpha=0.7)
-	vspan!(W([loc-width,loc+width]); label="Crossover", color=:darkred, alpha=0.7)
-
-	# y = W(tp_sz_transitions[:,1])
-	# δy = δW(tp_sz_transitions)
-	# plot!(p, Ns[(1+tp_N_window):(end-tp_N_window)], y; subplot=2, inset=(1, bbox(0.55,0.05,0.4,0.35)), legend=false, xlabel="System size N", ylabel="Crossover point", yerror=δy)
-	# lens!(p, [0.65,0.75],[-1.9,-0.3] ; inset = (1, bbox(0.05, 0.7, 0.25, 0.25)))
-	p
-end
-
-# ╔═╡ c3bb699c-e941-4a46-b430-bc1222b2ed09
-savefig(thouless_full_W, joinpath(SAVEPATH, "thouless_W.pdf"))
-
-# ╔═╡ da20058c-4073-4ac6-badd-00adfa0860eb
-hilberspacesize(N) = binomial(N,div(N-1,2))
-
-# ╔═╡ bbf4bd03-23eb-4dd9-b91c-d92eb3c4ff6a
-## include error of mean as ribbon
-## -> invisible
-entropy_main_W_errors = let p = plot(;xlabel="W", ylabel="Half-chain entropy", legend=:topright, xaxis=:log,
-		xlim=W_xlim)
-	xticks!(W_xticks, string.(W_xticks))
-	#color = Plots.colormap("RdBu", length(Ns)+3)[4:end]'
-	color = palette(:ice, length(Ns)+2, rev=true)[2:end]
-	plot!(p, W(ρvals), hce_means; palette=color, label=["N=$N" for N in Ns'], 
-		ribbon=hce_errorofmean .* sqrt.(hilberspacesize.(10:16))', fillalpha=0.2) 
-	# only consider statistical error of disorder -> _prep_vals also divided by #states so multiply back on
-	# this only happend for entropy because for the other indicators average is over eigenstate
-	# but for entropy it's actually over the cut location
-	p
-end
+# ╔═╡ 6b5ad674-b541-45ec-8bbf-76543f77297f
+# The final plot was assembled in an image editor to arrange subplots correctly.
 
 # ╔═╡ bfc60db7-04c1-4934-a3de-c6b18d841a2f
 entropy_plot_full_W_new = let detailsat = reverse([9,40,45]),
@@ -767,12 +575,218 @@ entropy_plot_full_W_new = let detailsat = reverse([9,40,45]),
 	# plot(entropy_main, p_linfit, p_lens; layout, dpi=200)
 end
 
+# ╔═╡ 9f63456f-9da1-4203-ad01-8d159ebd1bee
+savefig(entropy_plot_full_W,joinpath(SAVEPATH, "hce_W.pdf"))
+
 # ╔═╡ 9b4520ca-472e-4e1d-b612-62064f65889d
 savefig(entropy_plot_full_W_new,joinpath(SAVEPATH, "hce_W_new.pdf"))
 
+# ╔═╡ 300ae731-3551-43b8-ab40-924d521fdb7b
+md"""
+# Entropy Variance
+"""
+
+# ╔═╡ 33ec0a03-1d39-4b7f-91f2-55cc7c35b7fb
+entropy_var_main_W_errors = let p = plot(;xlabel="W", ylabel="Half-chain entropy std.dev", legend=:topleft, xaxis=:log, xlim=W_xlim)
+	xticks!(W_xticks, string.(W_xticks))
+	color = palette(:ice, length(Ns)+2, rev=true)[2:end]
+	plot!(p, W(ρvals), hce_std; palette=color, label=["N=$N" for N in Ns'], ribbon=hce_std_std)
+	p
+end
+
+# ╔═╡ 0fe73110-2508-4e83-a959-fd40b41e9ecc
+# use errors for fitting
+entropy_var_full_parabola_W = let fitrange = 37:42,
+	fitplotrange = fitrange,
+	p = plot(entropy_var_main_W_errors; legend=:outside, legendposition=(1.0,0.0), dpi=200, tickfontsize=10, labelfontsize=12)
+	@. model(x, p) = p[1] + p[2]*(x-p[3])^2
+
+	fits = [curve_fit(model, W(ρvals[fitrange]), ycol[fitrange], 1 ./ yerrcol[fitrange], [1.0, -30, 0.7]) for (ycol,yerrcol) in zip(eachcol(hce_std), eachcol(hce_std_std))]
+	for fit in fits
+		@show fit.param
+	end
+	fitplots = [model(W(ρvals[fitplotrange]), fit.param) for fit in fits]
+	maxima_loc = [fit.param[3] for fit in fits]
+	maxima_val = [fit.param[1] for fit in fits]
+	maxima_std = [stderror(fit)[3] for fit in fits]
+
+	plot!(p, W(ρvals[fitplotrange]), fitplots; color=:black, ls=:dash, alpha=0.9, label=false)
+	plot!(p, [], []; color=:black, ls=:dash, alpha=0.9, label="Quad. fit")
+		#label=reshape(["$(round(fit.param[3];sigdigits=4)) ± $(round(stderror(fit)[3];sigdigits=1))" for fit in fits], 1, :))
+	#scatter!(p, maxima_loc, maxima_val; label="Maxima", marker=:x, color=:black)
+	scatter!(p, maxima_loc, maxima_val; label="Maxima", marker=:vline, color=:black, xerror=maxima_std)
+
+	plot!(p, Ns, maxima_loc; yerror=maxima_std,
+	 	legend=nothing, xlabel="N",ylabel=L"W_{max}", inset=(1,bbox(0.65,0.05,0.5,0.35)), subplot=2)
+	hline!(p, [1/(2*0.7475979202)];subplot=2,color=:black, ls=:dot,width=1,label="Reyni limit"	)
+	annotate!(p, [(15.2, 0.658, ("Rényi limit",8))]; subplot=2)
+	# inset = plot!(p, Ns, maxima_loc; yerror=maxima_std,
+	# 	inset=(1,bbox(0.14,0.05,0.4,0.3)), subplot=2, legend=nothing, xlabel="N",ylabel="Maximum")
+
+	p
+end
+
+# ╔═╡ c60ded9a-a363-4f99-96a9-9f073065a8c4
+savefig(entropy_var_full_parabola_W, joinpath(SAVEPATH, "entropy_variance_W.pdf"))
+
+# ╔═╡ c2f1cdc5-a6e8-4fbf-909f-bfb966709ddb
+md"""
+# Thouless Parameter
+"""
+
+# ╔═╡ ab2d8ca2-5fc8-4f47-ba17-9141b709eef5
+md"""
+## Load data
+"""
+
+# ╔═╡ 3f676374-ed14-4844-98fd-6a23eee6dfc4
+tp_means_sz, tp_errorofmean_sz = let tp_shot_data_high = _prep_vals.(load_el.("sz", alpha6_high); dims=(1,2,4)), #[N][shot,rho]
+	tp_shot_data_low =
+	_prep_vals.(load_el.("sz", alpha6_low); dims=(1,2,4)) #[N][shot,rho]
+	tp_shot_data = [hcat(low, high)[:,ρsortperm] for (low,high) in zip(tp_shot_data_low,tp_shot_data_high)] #[N][shot,rho]
+	means = hcat(vec.(mean_ignore_nan.(tp_shot_data; dims=1))...) #[rho,N]
+	errorofmean = hcat(vec.(error_of_mean_ignore_nan.(tp_shot_data; dims=1))...)
+	means, errorofmean
+end;
+
+# ╔═╡ 386d2101-cc03-4cbd-b986-8c5b1cd055b2
+tp_means_szsz, tp_errorofmean_szsz = let tp_shot_data_high = _prep_vals.(load_el.("szsz", alpha6_high); dims=(1,2,4)), #[N][shot,rho]
+	tp_shot_data_low =
+	_prep_vals.(load_el.("szsz", alpha6_low); dims=(1,2,4)) #[N][shot,rho]
+	tp_shot_data = [hcat(low, high)[:,ρsortperm] for (low,high) in zip(tp_shot_data_low,tp_shot_data_high)] #[N][shot,rho]
+	means = hcat(vec.(mean_ignore_nan.(tp_shot_data; dims=1))...) #[rho,N]
+	errorofmean = hcat(vec.(error_of_mean_ignore_nan.(tp_shot_data; dims=1))...)
+	means, errorofmean
+end;
+
+# ╔═╡ 0513fe1d-d908-447a-9ff7-88b03e9addf8
+tp_means_hop, tp_errorofmean_hop = let tp_shot_data_high = _prep_vals.(load_el.("hopping", alpha6_high); dims=(1,2,4)), #[N][shot,rho]
+	tp_shot_data_low =
+	_prep_vals.(load_el.("hopping", alpha6_low); dims=(1,2,4)) #[N][shot,rho]
+	tp_shot_data = [hcat(low, high)[:,ρsortperm] for (low,high) in zip(tp_shot_data_low,tp_shot_data_high)] #[N][shot,rho]
+	means = hcat(vec.(mean_ignore_nan.(tp_shot_data; dims=1))...) #[rho,N]
+	errorofmean = hcat(vec.(error_of_mean_ignore_nan.(tp_shot_data; dims=1))...)
+	means, errorofmean
+end;
+
+# ╔═╡ e91c4684-7530-47b8-9ce4-12b06e235726
+md"""
+## Find transition location
+"""
+
+# ╔═╡ b5d37d9f-7c44-4218-9e0b-1cb6e4915ad3
+interpolate(x1,x2, steps=201) = x1 == x2 ? [x1] : collect(range(x1,x2; length=steps))
+
+# ╔═╡ 1376a743-1355-49a5-977d-264e63bc0881
+function tp_min_variance(data,ρs; iterations=5)
+	for i in 1:iterations
+		means_spread = SimLib.stddrop(data, dims=2)
+		minind = argmin(means_spread)
+		i == iterations && return ρs[minind]
+		left = max(1,minind-1)
+		right = min(minind+1,length(ρs))
+		data = hcat(interpolate(data[left,:], data[minind,:])...,
+			interpolate(data[minind, :], data[right, :])...)'
+		ρs = vcat(interpolate(ρs[left,:], ρs[minind,:])...,
+			interpolate(ρs[minind, :], ρs[right, :])...)
+	end
+end
+
+# ╔═╡ f69d1bb5-20cf-416f-a581-4acb56676783
+function tp_find_transition(data, ρs)
+	transition = tp_min_variance(data,ρs)
+	two_line_intersections = [tp_min_variance(data[:,[i,j]],ρs) for i in 1:size(data,2) for j in i+1:size(data,2)]
+	return [transition, std(two_line_intersections)]
+end
+
+# ╔═╡ 5d1d0e06-5269-4b65-ba36-c71ef6afaa52
+begin
+	tp_transition_window = 20:length(ρvals)-3
+	tp_sz_transition = tp_find_transition(tp_means_sz[tp_transition_window, :], ρvals[tp_transition_window])
+	tp_szsz_transition = tp_find_transition(tp_means_szsz[tp_transition_window, :], ρvals[tp_transition_window])
+	tp_hop_transition = tp_find_transition(tp_means_hop[tp_transition_window, :], ρvals[tp_transition_window])
+	(tp_sz_transition, tp_szsz_transition, tp_hop_transition)
+end
+
+# ╔═╡ 99dbe4d7-2919-4677-8f97-0566ff66b146
+tp_N_window = 1
+
+# ╔═╡ 01cb22ef-1d44-4910-8e0c-77da2411081d
+begin
+	tp_sz_transitions = hcat([tp_find_transition(tp_means_sz[tp_transition_window, (i-tp_N_window):(i+tp_N_window)], ρvals[tp_transition_window]) for i in (1+tp_N_window):(length(Ns)-tp_N_window)]...)'
+	tp_szsz_transitions = hcat([tp_find_transition(tp_means_szsz[tp_transition_window, (i-tp_N_window):(i+tp_N_window)], ρvals[tp_transition_window]) for i in (1+tp_N_window):(length(Ns)-tp_N_window)]...)'
+	tp_hop_transitions = hcat([tp_find_transition(tp_means_hop[tp_transition_window, (i-tp_N_window):(i+tp_N_window)], ρvals[tp_transition_window]) for i in (1+tp_N_window):(length(Ns)-tp_N_window)]...)'
+end
+
+# ╔═╡ 1b3e8683-02b7-45a1-a65e-cd74083bb2c5
+tp_sz_transition
+
+# ╔═╡ 30100b77-d704-4f7e-9aea-9a2953b86c3b
+thouless_main_W = let p = plot(;xlabel="W", ylabel="Thouless parameter \$\\mathcal{G}\$", legend=:topright, xaxis=log, xlim=W_xlim)
+	xticks!(p, W_xticks, string.(W_xticks))
+	color = palette(:ice, length(Ns)+3; rev=true)[2:end]
+	plot!(p, W(ρvals), tp_means_sz; palette=color, label=["N=$N" for N in Ns'])
+	loc, width = tp_sz_transition
+	vspan!(W([loc-width,loc+width]); label="Crossover", color=:darkred, alpha=0.7)
+	p
+end
+
+# ╔═╡ 7122e488-d1cc-44c8-ac39-c92fa3b031fc
+## errors only barely visible
+thouless_main_W_errors = let p = plot(;xlabel="W", ylabel="Thouless parameter \$\\mathcal{G}\$", legend=:topright, xaxis=log, xlim=W_xlim)
+	xticks!(p, W_xticks, string.(W_xticks))
+	color = palette(:ice, length(Ns)+3; rev=true)[2:end]
+	plot!(p, W(ρvals), tp_means_sz; palette=color, label=["N=$N" for N in Ns'], ribbon=tp_errorofmean_sz)
+	loc, width = tp_sz_transition
+	vspan!(W([loc-width,loc+width]); label="Crossover", color=:darkred, alpha=0.7)
+	p
+end
+
+# ╔═╡ a50b42e4-2001-4dbc-8c67-9b914e543cfb
+md"""
+## Comparison of the three operators
+"""
+
+# ╔═╡ 41ce7ca3-6ea2-4132-b931-bfd4db9fa763
+let sz_plot = plot(thouless_main_W_errors; title="\$W_1 = \\sigma_z\$"),
+	szsz_plot = let p = plot(;title="\$W_2 = \\sigma_z \\sigma_z\$", xlabel="W", ylabel="Thouless parameter \$\\mathcal{G}\$", legend=:topright, xaxis=log, xlim=W_xlim)
+		xticks!(p, W_xticks, string.(W_xticks))
+		color = palette(:ice, length(Ns)+3; rev=true)[2:end]
+		plot!(p, W(ρvals), tp_means_szsz; palette=color, label=["N=$N" for N in Ns'], ribbon=tp_errorofmean_szsz)
+		loc, width = tp_szsz_transition
+		vspan!(W([loc-width,loc+width]); label="Crossover", color=:darkred, alpha=0.7)
+		p
+	end
+	hop_plot = let p = plot(;title="\$W_3 = \\sigma_+ \\sigma_- + \\mathrm{h.c.}\$", xlabel="W", ylabel="Thouless parameter \$\\mathcal{G}\$", legend=:topright, xaxis=log, xlim=W_xlim)
+		xticks!(p, W_xticks, string.(W_xticks))
+		color = palette(:ice, length(Ns)+3; rev=true)[2:end]
+		plot!(p, W(ρvals), tp_means_hop; palette=color, label=["N=$N" for N in Ns'], ribbon=tp_errorofmean_hop)
+		loc, width = tp_hop_transition
+		vspan!(W([loc-width,loc+width]); label="Crossover", color=:darkred, alpha=0.7)
+		p
+	end
+	plot(sz_plot,szsz_plot,hop_plot; layout=[1;1;1], size=(500,1000))
+end
+
+# ╔═╡ 83ec7e23-8f38-4523-b068-1e4a19aa02e1
+md"""
+Virtually identical
+"""
+
+# ╔═╡ 0e173da7-feb0-4c4e-aa34-084a756a168f
+md"""
+## Make and save plot
+"""
+
+# ╔═╡ 5a366799-c8a1-4fe5-afe2-909524e30e5e
+thouless_full_W = plot(thouless_main_W; dpi=200, legend=:topright, legend_columns=-1, tickfontsize=10)
+
+# ╔═╡ c3bb699c-e941-4a46-b430-bc1222b2ed09
+savefig(thouless_full_W, joinpath(SAVEPATH, "thouless_W.pdf"))
+
 # ╔═╡ f37acd5b-b8a4-4caf-91a0-9cba909e5a78
 md"""
-## Entropy per cut
+# Entropy per cut
 """
 
 # ╔═╡ 5e099ce4-8f01-4087-bdb6-ba1d6ab23165
@@ -788,11 +802,15 @@ let p = plot(;xlabel="Number of pairs N",ylabel="Entropy per cut", dpi=200, labe
 end
 
 # ╔═╡ Cell order:
+# ╟─2a544bad-35cb-4229-b75e-8d3283b8c288
 # ╠═d05f72ed-31ac-4983-b510-ce6d6527879a
 # ╠═a35a6fb5-dd1e-4998-8c2a-097acb9bf7d4
 # ╠═1516ba16-a8ef-11ec-3979-1f7edd32dc6d
+# ╠═4d171def-b37a-44ea-a192-03a88debe63c
 # ╠═fc5ab3d2-acdd-47a7-bbdc-c40b28976907
 # ╠═f92f65b3-59f0-4067-a744-3105c9411d0a
+# ╠═ed2305f5-7bc9-43a8-b5eb-75b5a8c00eca
+# ╠═da20058c-4073-4ac6-badd-00adfa0860eb
 # ╠═48544d55-446d-4024-8bf9-fa428de11c0b
 # ╠═87c93f63-927f-4348-8534-bac286bb2809
 # ╠═b9e129d6-de8d-48f4-b07d-48046b64148f
@@ -809,76 +827,74 @@ end
 # ╠═0438606f-810b-4423-a1de-c416dce708f3
 # ╠═e144f706-23aa-4143-adcb-d8e40b558b8b
 # ╟─bc11f188-7bd3-49f0-bb29-044d4f27de3c
+# ╟─799f75b3-6bbd-4325-89b2-6a24f780f51a
 # ╠═ac92e5e6-171e-4b8e-aca3-344c0d8ea1a9
-# ╠═e34fa01d-466b-48e4-9a10-5f0e592909cd
-# ╠═9d67a245-2d8f-48f7-81da-09b2993cda37
-# ╠═dadb5ab4-0e95-4366-84b1-ee2809313927
+# ╠═33b9ecab-6984-416a-8127-6367da4d04ef
+# ╟─336c5f98-71a9-40e8-9821-7c56033a40f9
 # ╠═f0665d91-1f67-4716-87ce-a3ea3b9039bf
-# ╠═997543e2-a27f-479d-be8b-73d7b639b7f2
 # ╠═a5c221a6-c6c2-4301-b93b-7178859bcf68
 # ╠═0a4e0811-036d-46f5-ae89-8ffa7fb7ab1a
 # ╠═8b8bafa7-e325-4d36-9624-1e1efb6c972d
 # ╠═1301fc69-9d92-43c6-8274-eb3c11995b8b
 # ╟─7f082cf1-12e8-4134-a6e3-371af39164c7
+# ╟─81071ead-3233-42bc-a7cb-c0aa4fc33ffe
 # ╠═80e82ba2-8a72-4ba9-9828-42aea93ba3bd
 # ╠═4721cdab-edc9-42dc-9656-64534000ed35
 # ╠═5b30d6d4-6b12-4da3-b5f5-1e1170abaac5
-# ╠═a35f6334-1d05-4925-8c16-07b3c1c75130
-# ╠═44226e15-2f6d-4077-bb6e-d42ff7af5597
-# ╠═7e66c883-eb17-410f-b915-3d9b273af71b
-# ╠═5de08736-2542-4306-b2b2-caca4c611168
-# ╠═bdd0e16f-5615-477e-acf6-670ea51b2381
-# ╠═2eb28070-691f-4860-a7ac-87c2d9fb81d0
-# ╠═8a4d457c-f788-4c04-b84a-3734a4e3e865
-# ╠═21752b81-f146-4ffb-8cfd-627e63266610
-# ╠═aff5c4e6-8ed1-4b12-88b3-43e9ebdc617a
+# ╠═bbea8da3-c3a5-440a-875d-99ea1293e546
+# ╠═b1e54703-202c-47a1-8a15-c8f4e86e9387
+# ╠═c4eae1f2-95c1-4114-a1dd-3b437414c189
+# ╠═aef7cc15-7c6a-4f17-b6aa-5d6398ba8487
+# ╟─9db9970d-436b-46d5-bc9b-65477dc529f1
 # ╠═5e57efdc-5ae3-4a86-ae6d-9f0a49c4d5c7
 # ╠═21352df0-3493-48ef-865e-2f6b0614b0f4
 # ╠═aad4eeb4-8fdb-40e3-9301-49bd9a4de439
 # ╠═241ddd4b-f075-4785-b161-2192982f2137
 # ╠═fc0a8c34-1bc8-4003-8165-13a362257648
-# ╠═c4eae1f2-95c1-4114-a1dd-3b437414c189
-# ╠═aef7cc15-7c6a-4f17-b6aa-5d6398ba8487
 # ╠═81fcb0e6-ad67-4313-8af5-a6d79d1e941f
 # ╟─97bf13c5-cfc2-4554-925d-759444bf3a45
-# ╠═15646ef5-cf1d-4a14-8fa9-4bc5e0842272
-# ╠═d542da72-4c4a-4cfa-b490-4ae881e8538a
-# ╠═f9491876-b0cd-4f2d-9b9f-ca24283dfb44
+# ╟─0f802771-29b5-472d-bcee-c6987bd97aea
+# ╠═eb5b02be-5195-47b0-a300-f4071e0f56c3
+# ╠═b3ca4a97-d758-4fa5-b881-fc34063b5a28
+# ╠═6ea0c192-202f-472a-a7f0-51a1a8e72256
+# ╠═05ccfc6e-92c2-45b5-b49d-ead83bf1ad4c
+# ╠═9f8782a6-8c0b-45cb-94ec-64a07addb55b
+# ╠═895cace4-ae8b-4d39-8b76-3cdf09815940
+# ╠═a8b925f1-1763-43eb-9162-219b85ede984
+# ╟─0504d150-3841-4a44-9d06-f5d27b3f9b39
 # ╠═99d387f0-ae7e-4ce4-8ad8-6c8bf95e3819
 # ╠═bbf4bd03-23eb-4dd9-b91c-d92eb3c4ff6a
 # ╠═5d930be7-5df7-47bf-be84-2a055106920b
 # ╠═f9abd6af-f125-41ef-915d-a73b041f9690
 # ╠═f73cc7af-6f60-48c2-bdf1-3de67260e9b6
-# ╠═07b2ef84-202b-4960-a5ab-af7c7be71f6a
 # ╠═6b5ad674-b541-45ec-8bbf-76543f77297f
 # ╠═bfc60db7-04c1-4934-a3de-c6b18d841a2f
-# ╠═ef28ab4b-e4fa-4188-913a-fb298b34b6e9
-# ╠═b6ebda19-4cb0-419f-a3ed-1525cb09a929
-# ╠═52c23938-f012-459b-9047-b103fe6a2fe7
-# ╠═9f8782a6-8c0b-45cb-94ec-64a07addb55b
-# ╠═a8b925f1-1763-43eb-9162-219b85ede984
-# ╠═895cace4-ae8b-4d39-8b76-3cdf09815940
 # ╠═9f63456f-9da1-4203-ad01-8d159ebd1bee
 # ╠═9b4520ca-472e-4e1d-b612-62064f65889d
 # ╟─300ae731-3551-43b8-ab40-924d521fdb7b
-# ╠═941cc59d-c4f3-45bf-885b-290a2a7634f2
-# ╠═67bf03ac-bc0c-4fce-afc9-edd8938925ee
+# ╠═33ec0a03-1d39-4b7f-91f2-55cc7c35b7fb
+# ╠═0fe73110-2508-4e83-a959-fd40b41e9ecc
 # ╠═c60ded9a-a363-4f99-96a9-9f073065a8c4
 # ╟─c2f1cdc5-a6e8-4fbf-909f-bfb966709ddb
-# ╠═81f27a5a-9765-4f16-9174-cd7e217e7a41
-# ╠═20721250-f8e6-4c55-8b8d-d2d20db10602
-# ╠═e30bae01-4922-4dc6-82ce-28f5d8b4e368
+# ╟─ab2d8ca2-5fc8-4f47-ba17-9141b709eef5
+# ╠═3f676374-ed14-4844-98fd-6a23eee6dfc4
+# ╠═386d2101-cc03-4cbd-b986-8c5b1cd055b2
+# ╠═0513fe1d-d908-447a-9ff7-88b03e9addf8
+# ╟─e91c4684-7530-47b8-9ce4-12b06e235726
 # ╠═b5d37d9f-7c44-4218-9e0b-1cb6e4915ad3
 # ╠═f69d1bb5-20cf-416f-a581-4acb56676783
 # ╠═1376a743-1355-49a5-977d-264e63bc0881
 # ╠═5d1d0e06-5269-4b65-ba36-c71ef6afaa52
 # ╠═99dbe4d7-2919-4677-8f97-0566ff66b146
 # ╠═01cb22ef-1d44-4910-8e0c-77da2411081d
-# ╠═6a05e029-0b39-4ea5-a7ef-e52defbe771e
 # ╠═1b3e8683-02b7-45a1-a65e-cd74083bb2c5
 # ╠═30100b77-d704-4f7e-9aea-9a2953b86c3b
+# ╠═7122e488-d1cc-44c8-ac39-c92fa3b031fc
+# ╟─a50b42e4-2001-4dbc-8c67-9b914e543cfb
+# ╠═41ce7ca3-6ea2-4132-b931-bfd4db9fa763
+# ╟─83ec7e23-8f38-4523-b068-1e4a19aa02e1
+# ╟─0e173da7-feb0-4c4e-aa34-084a756a168f
 # ╠═5a366799-c8a1-4fe5-afe2-909524e30e5e
 # ╠═c3bb699c-e941-4a46-b430-bc1222b2ed09
-# ╠═da20058c-4073-4ac6-badd-00adfa0860eb
 # ╟─f37acd5b-b8a4-4caf-91a0-9cba909e5a78
 # ╠═5e099ce4-8f01-4087-bdb6-ba1d6ab23165
